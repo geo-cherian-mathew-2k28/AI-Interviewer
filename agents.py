@@ -12,8 +12,8 @@ class NexusAI:
             model=self.model,
             temperature=0.7,
             base_url="http://localhost:11434",
-            num_ctx=2048,       # Optimization
-            num_predict=200,    # Max response length
+            num_ctx=4096,       # Increased Context Window (Remember more conversation)
+            num_predict=-1,     # CHANGED: -1 means 'Generate until finished' (No cutoff)
         )
 
     def generate_response(self, resume_context, history, user_input):
@@ -27,8 +27,8 @@ class NexusAI:
 
         messages = [SystemMessage(content=system_instruction)]
         
-        # Optimized History Window (Last 4 messages)
-        for msg in history[-4:]: 
+        # Keep last 6 messages for context
+        for msg in history[-6:]: 
             if msg["role"] == "user":
                 messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
@@ -45,6 +45,7 @@ class NexusAI:
     def evaluate_candidate(self, conversation_history):
         prompt = config.EVALUATOR_PROMPT.format(transcript=conversation_history)
         try:
+            # Evaluation needs to be long, so we ensure no cutoff here too
             response = self.llm.invoke([HumanMessage(content=prompt)])
             return response.content
         except:
