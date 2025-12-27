@@ -22,7 +22,6 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
 
-    /* HIDE STREAMLIT BRANDING */
     .stDeployButton {display:none;}
     footer {visibility: hidden;}
     
@@ -35,7 +34,6 @@ st.markdown("""
         color: #e0e0e0;
         border-left: 3px solid #818cf8;
         border-radius: 12px;
-        width: 100%; 
     }
 
     div[data-testid="stChatMessage"]:has(div[aria-label="user"]) div[data-testid="stChatMessageContent"] {
@@ -44,7 +42,6 @@ st.markdown("""
         border-radius: 12px;
         box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
     }
-    
     div[data-testid="stChatMessage"] .st-emotion-cache-1p1m4tp { background-color: #2563eb; }
 
     /* HEADER */
@@ -57,43 +54,32 @@ st.markdown("""
     .header-text { font-weight: 700; color: #fff; font-size: 1.1rem; letter-spacing: 1px; }
     .status-badge { margin-left: 20px; font-size: 0.75rem; background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.2); }
 
-    /* --- THE FIX: FIXED POSITIONING SIDEBAR --- */
+    /* SANDBOX CONTAINER (Inline Bottom Style) */
     .sandbox-container {
-        position: fixed;
-        top: 80px;         /* 80px from top */
-        right: 20px;       /* 20px from right edge */
-        width: 45%;        /* Takes up 45% of screen */
-        height: auto;
-        z-index: 9999;      /* Stays ON TOP of everything */
-        
         border: 1px solid #333;
         border-radius: 12px;
-        background-color: rgba(10, 10, 15, 0.95);
-        backdrop-filter: blur(10px);
-        box-shadow: -10px 10px 30px rgba(0,0,0,0.5);
-        padding: 10px;
-        animation: slideInRight 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+        background-color: #0a0a0c; 
+        padding: 20px;
+        margin-top: 20px;
+        margin-bottom: 50px; /* Space above input bar */
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        animation: slideUp 0.5s ease-out;
+        border-left: 4px solid #00ff41;
     }
 
-    @keyframes slideInRight {
-        from { opacity: 0; transform: translateX(100px); }
-        to { opacity: 1; transform: translateX(0); }
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
-    /* Code Editor Styling */
     .stTextArea textarea {
         background-color: #0d0d0d !important;
         color: #00ff41 !important;
         font-family: 'Consolas', monospace;
-        border: none !important;
-    }
-    
-    /* Limit Chat Width when Sandbox is Open */
-    .chat-narrow {
-        max-width: 50% !important;
+        border: 1px solid #333 !important;
     }
 
-    .block-container { padding-top: 5rem; }
+    .block-container { padding-top: 5rem; padding-bottom: 8rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,9 +90,16 @@ if "interview_active" not in st.session_state: st.session_state.interview_active
 if "resume_text" not in st.session_state: st.session_state.resume_text = ""
 if "show_sandbox" not in st.session_state: st.session_state.show_sandbox = False
 
-# --- TRIGGER LOGIC ---
+# --- TRIGGER LOGIC (AUTO-CLOSE) ---
 def detect_coding_intent(messages):
     if not messages: return False
+    
+    # 1. IMMEDIATE CLOSE: If user just submitted code, hide sandbox
+    last_msg = messages[-1]
+    if last_msg["role"] == "user" and "CODE SUBMISSION" in last_msg["content"]:
+        return False
+
+    # 2. TRIGGER OPEN: Check if Assistant asked for code
     for msg in reversed(messages):
         if msg["role"] == "assistant":
             content = msg["content"].lower()
@@ -116,7 +109,10 @@ def detect_coding_intent(messages):
                 "algorithm", "linked list", "array", "recursion", "object oriented",
                 "sql query", "database", "html", "css", "react", "component", "python", "java"
             ]
-            if any(word in content for word in trigger_words): return True
+            
+            if any(word in content for word in trigger_words):
+                return True
+            
             if "thank you" in content or "next question" in content:
                 if not any(word in content for word in trigger_words): return False
             return False 
@@ -156,7 +152,6 @@ with st.sidebar:
 
 # --- MAIN LOGIC ---
 
-# 1. LANDING PAGE
 if not st.session_state.interview_active and "evaluation_mode" not in st.session_state:
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     col_m = st.columns([1,2,1])[1]
@@ -165,7 +160,6 @@ if not st.session_state.interview_active and "evaluation_mode" not in st.session
         st.markdown("<p style='text-align: center; color: #888;'>Autonomous Recruiting Infrastructure</p>", unsafe_allow_html=True)
         st.info("👈 Upload Resume in Sidebar to Begin")
 
-# 2. EVALUATION
 elif "evaluation_mode" in st.session_state:
     st.title("Final Assessment")
     transcript = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
@@ -176,19 +170,13 @@ elif "evaluation_mode" in st.session_state:
         st.session_state.clear()
         st.rerun()
 
-# 3. LIVE INTERFACE
 else:
     # --- AUTO-DETECT STATE ---
     st.session_state.show_sandbox = detect_coding_intent(st.session_state.messages)
 
-    # --- CHAT CONTAINER (Responsive Width) ---
-    # If sandbox is open, we only use half the screen for chat
-    if st.session_state.show_sandbox:
-        col_chat = st.columns([1, 1])[0] 
-    else:
-        col_chat = st.container()
-
-    with col_chat:
+    # --- CHAT CONTAINER ---
+    # We use a centered container for better readability
+    with st.container():
         for msg in st.session_state.messages:
             if msg["role"] == "user":
                 with st.chat_message("user", avatar="🧑‍💻"):
@@ -197,25 +185,25 @@ else:
                 with st.chat_message("assistant", avatar="⚡"):
                     st.markdown(msg["content"])
 
-    # --- FIXED FLOATING SANDBOX ---
+    # --- INLINE SANDBOX (APPEARS AT BOTTOM) ---
     if st.session_state.show_sandbox:
-        # We put this in a generic container, but CSS handles the positioning
         st.markdown('<div class="sandbox-container">', unsafe_allow_html=True)
-        
-        c1, c2 = st.columns([8, 2])
-        c1.info("⚡ Technical Challenge Active")
+        st.markdown("### ⚡ Developer Environment Active")
+        st.caption("Nexus has requested a code implementation.")
         
         code_input = st.text_area(
             "Code Editor", 
             value="def solution():\n    # Write efficient code here\n    pass", 
-            height=400,
+            height=350,
             label_visibility="collapsed"
         )
         
-        if st.button("⚡ Execute & Submit", type="primary", use_container_width=True):
+        # This button submits the code, updates history, and triggers a rerun.
+        # The rerun hides this box because 'detect_coding_intent' sees the submission.
+        if st.button("✅ Submit Code to Nexus", type="primary", use_container_width=True):
             formatted_code = f"**CODE SUBMISSION:**\n```python\n{code_input}\n```"
             st.session_state.messages.append({"role": "user", "content": formatted_code})
-            st.toast("Code uploaded to Neural Engine", icon="🚀")
+            st.toast("Code uploaded successfully", icon="🚀")
             st.rerun()
             
         st.markdown('</div>', unsafe_allow_html=True)
@@ -227,14 +215,15 @@ else:
 
     # --- AI PROCESSING ---
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
-        with col_chat:
-            with st.chat_message("assistant", avatar="⚡"):
-                with st.spinner("Thinking..."):
-                    response = st.session_state.nexus.generate_response(
-                        st.session_state.resume_text, 
-                        st.session_state.messages, 
-                        st.session_state.messages[-1]["content"]
-                    )
-                    st.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                    st.rerun()
+        # Don't show spinner if we just submitted code (it feels faster)
+        with st.chat_message("assistant", avatar="⚡"):
+            with st.spinner("Processing..."):
+                response = st.session_state.nexus.generate_response(
+                    st.session_state.resume_text, 
+                    st.session_state.messages, 
+                    st.session_state.messages[-1]["content"]
+                )
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                # Critical Rerun: Updates the layout to hide/show sandbox based on new response
+                st.rerun()
